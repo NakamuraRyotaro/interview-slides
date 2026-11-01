@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="AIコーチングの要約生成機能。要件整理、技術比較、非同期処理の設計と学び。">
+<title>要約生成の設計と学び | Interview Notes</title>
+<link rel="stylesheet" href="slides.css"><script defer src="slides.js"></script>
+</head>
+<body>
+<header class="toolbar"><a class="brand" href="#slide-1">INTERVIEW NOTES <span>/ ENGINEERING</span></a><div class="controls"><button id="overview" aria-pressed="false">一覧表示</button><button id="print">PDF・印刷</button><button id="fullscreen">全画面</button></div></header>
+<main id="deck" aria-label="要約生成機能の設計・実装スライド">
+<section class="slide" id="slide-1" aria-labelledby="title-1">
+<div class="eyebrow">01 / CONTEXT & ROLE <span>SITUATION → TASK</span></div>
+<h1 id="title-1">画面実装から、<br><em>機能の設計へ。</em></h1>
+<p class="lead">AIとの対話でマネジメントの課題を整理し、<br>具体的なアクションプランにつなげるサービス。</p>
+<div class="role-layout"><div class="journey"><div><small>START</small><h3>画面実装</h3><p>LLM Wikiで仕様を理解。<br>Figma MCPを活用し、レビューで責務分離を学ぶ。</p></div><div class="journey-arrow">↓</div><div><small>CHALLENGE</small><h3>要約生成に立候補</h3><p>研究室での会話要約の経験を活かし、<br>処理方式・障害時の設計にも挑戦。</p></div></div>
+<div class="relationship"><div class="person"><small>PRODUCT</small><h3>PdM</h3><p>ユーザー価値・優先順位</p></div><div class="connection">↑ 利用場面と選択肢　 ↓ 期待する体験</div><div class="person me"><small>MY ROLE</small><h3>私</h3><p>調査 → 提案 → 仕様具体化 → 実装</p></div><div class="connection">↓ 比較案と根拠　 ↑ 設計上の助言</div><div class="person"><small>ENGINEERING</small><h3>Tech Lead</h3><p>技術方針・設計レビュー</p></div></div></div>
+<div class="takeaway">目指したこと <strong>可用性を考慮した設計判断 × PdM・Tech Leadとの協働</strong></div>
+</section>
+<section class="slide" id="slide-2" aria-labelledby="title-2">
+<div class="eyebrow">02 / REQUIREMENTS <span>TASK → ACTION</span></div><h2 id="title-2">技術を選ぶ前に、<br><em>必要な動作を整理する。</em></h2><p class="lead">「要約を生成する」から、「どのように提供するか」へ。</p>
+<div class="requirements"><div class="req-head"><span>考慮すること</span><span></span><span>設計に落とす</span></div><div class="req"><div><b>01　待ち時間</b><p>生成の完了までユーザーを待たせるか？</p></div><i>→</i><strong>非同期実行</strong></div><div class="req"><div><b>02　一時的な失敗</b><p>外部APIが一時的に失敗したら？</p></div><i>→</i><strong>間隔を空けて再試行</strong></div><div class="req"><div><b>03　負荷集中</b><p>生成処理が同時に増えたら？</p></div><i>→</i><strong>同時実行数を制限</strong></div><div class="req"><div><b>04　最終的な失敗</b><p>再試行しても完了しなかったら？</p></div><i>→</i><strong>状態・原因を記録</strong></div></div>
+<div class="takeaway">相談の工夫 <strong>PdMには、技術用語より「ユーザーにどう見えるか」で確認。</strong></div>
+</section>
+<section class="slide" id="slide-3" aria-labelledby="title-3">
+<div class="eyebrow">03 / DECISION <span>ACTION</span></div><h2 id="title-3">知らない技術を、<br><em>比較して提案できる状態へ。</em></h2>
+<div class="research"><span>要件を整理</span><i>→</i><span>AIと壁打ち<br><small>候補・用語を理解</small></span><i>→</i><span>同じ観点で比較</span><i>→</i><span>Tech Leadに提案</span></div>
+<div class="table-scroll"><table><caption class="sr-only">非同期処理の方式比較</caption><thead><tr><th scope="col">比較観点</th><th scope="col">BullMQ + Redis</th><th scope="col">DBポーリング</th><th scope="col" class="chosen">Cloud Tasks <small>採用</small></th></tr></thead><tbody><tr><th scope="row">処理の開始</th><td>ワーカーが取得</td><td>定期的にDBを確認</td><td class="chosen">HTTPで呼び出す</td></tr><tr><th scope="row">再試行</th><td>BullMQの機能</td><td>アプリ側で実装</td><td class="chosen">サービスの設定</td></tr><tr><th scope="row">追加の運用</th><td>Redis・ワーカー</td><td>定期実行・取得処理</td><td class="chosen">キュー・権限・実行先</td></tr><tr><th scope="row">選定上の論点</th><td>追加基盤の管理</td><td>確認間隔による遅延</td><td class="chosen">既存GCPと統合</td></tr></tbody></table></div>
+<div class="decision"><small>WHY CLOUD TASKS</small><p>既存のGCPを活かし、<strong>Redisの追加運用を避けながら<br>再試行を管理できる。</strong></p></div>
+<p class="footnote">比較はプロジェクトの設計資料に基づく整理。AIは候補と論点の整理に活用し、採用案は理由を添えて相談。</p>
+</section>
+<section class="slide" id="slide-4" aria-labelledby="title-4">
+<div class="eyebrow">04 / IMPLEMENTATION <span>INPUT</span></div><h2 id="title-4">① 会話履歴を、<br><em>要約の入力へ。</em></h2>
+<div class="pipeline" aria-label="処理全体"><b class="active">01 履歴取得</b><i>→</i><b>02 要約生成</b><i>→</i><b>03 結果保存</b></div>
+<div class="architecture"><div class="flow-row"><div class="node">ユーザー<small>セッション終了</small></div><i>→</i><div class="node wide">バックエンド<small>ジョブをDBに登録 → キュー投入</small></div><i>→</i><div class="node">Cloud Tasks<small>タスクを管理</small></div></div><div class="return-label">バックエンドからユーザーへ応答 <span>↓ キューからHTTP呼び出し</span></div><div class="backend"><small class="boundary-label">既存バックエンドAPI内のジョブ処理</small><div class="flow-row"><div class="node db">PostgreSQL<small>対象セッションの会話履歴</small></div><i>→</i><div class="node active">履歴取得<small>入力データを準備</small></div><i>→</i><div class="node faded">要約生成</div><i>→</i><div class="node faded">結果保存</div></div></div></div>
+<div class="takeaway">構成のポイント <strong>既存APIにジョブ実行用の入口を用意し、キューから呼び出す。</strong></div>
+</section>
+<section class="slide" id="slide-5" aria-labelledby="title-5">
+<div class="eyebrow">05 / IMPLEMENTATION <span>GENERATION & RETRY</span></div><h2 id="title-5">② 外部LLMで生成し、<br><em>一時的な失敗に備える。</em></h2>
+<div class="pipeline"><b>01 履歴取得</b><i>→</i><b class="active">02 要約生成</b><i>→</i><b>03 結果保存</b></div>
+<div class="generation"><div class="node queue">Cloud Tasks<small>再試行を管理</small></div><div class="job-box"><small>HTTP → ジョブ全体を実行</small><div class="flow-row"><span>履歴取得</span><i>→</i><b class="pill">要約生成</b><i>→</i><span>結果保存</span></div></div><div class="llm"><span>↑ 会話＋要約指示　 ↓ 生成結果</span><div class="node active">外部LLM API</div></div><div class="retry">↶ 一時失敗：間隔を空けて、ジョブの入口から再実行</div></div>
+<div class="two-cards"><article><small>RECOVERY</small><h3>バックオフ付き再試行</h3><p>失敗直後に繰り返さず、<br>時間を空けて回復を待つ。</p></article><article><small>LOAD CONTROL</small><h3>同時実行数を制限</h3><p>処理が集中したときも、<br>外部APIやDBへの負荷を抑える。</p></article></div>
+<p class="footnote">再試行はLLM呼び出し単体ではなくジョブ単位。途中まで成功した処理の再実行も考慮が必要。</p>
+</section>
+<section class="slide" id="slide-6" aria-labelledby="title-6">
+<div class="eyebrow">06 / IMPLEMENTATION <span>PERSISTENCE</span></div><h2 id="title-6">③ 結果と状態を残し、<br><em>完了まで追跡する。</em></h2>
+<div class="pipeline"><b>01 履歴取得</b><i>→</i><b>02 要約生成</b><i>→</i><b class="active">03 結果保存</b></div>
+<div class="outcomes"><article class="success"><small>SUCCESS</small><h3>正常に処理できた</h3><div class="vertical-flow"><div>生成結果をDBへ保存</div><i>↓</i><div>ジョブの全処理が成功</div><i>↓</i><div class="status">COMPLETED</div></div><p>生成した要約を利用できる状態へ。</p></article><article class="failure"><small>FINAL FAILURE</small><h3>再試行しても失敗した</h3><div class="vertical-flow"><div>失敗原因・日時をDBへ保存</div><i>↓</i><div>失敗状態として記録</div><i>↓</i><div class="status">FAILED</div></div><p>後から調査できる手掛かりを残す。</p></article></div>
+<div class="takeaway">運用まで考える <strong>「生成できたか」だけでなく、「失敗した理由」を追えるように。</strong></div>
+</section>
+<section class="slide" id="slide-7" aria-labelledby="title-7">
+<div class="eyebrow">07 / REFLECTION <span>RESULT & LEARNING</span></div><h2 id="title-7">動く機能から、<br><em>失敗時も考えた設計へ。</em></h2>
+<div class="result-strip"><small>仕組みとして実現すること</small><p>非同期の要約生成 <i>＋</i> 再試行・負荷制限 <i>＋</i> 結果と失敗の記録</p></div>
+<div class="learnings"><article><span class="big-number">01</span><h3>設計の視野</h3><p>正常時だけでなく、待ち時間・失敗時の動作・調査方法まで仕様にする。</p></article><article><span class="big-number">02</span><h3>未知の技術の調べ方</h3><p>要件を先に整理。AIとの壁打ちで理解を深め、同じ観点で比較して提案する。</p></article><article><span class="big-number">03</span><h3>チームとの協働</h3><p>PdMにはユーザー体験を。Tech Leadには選択肢と根拠を示し、合意を具体化する。</p></article></div>
+<div class="closing">経験を足掛かりに手を挙げ、<br><strong>仕様を考える役割へ、一歩広げる。</strong></div><p class="footnote">面接用の構成案。個人の詳細な担当範囲・検証結果・リリース実績・定量効果は確認後に追記。</p>
+</section>
+</main>
+<footer class="navigation"><span class="hint">← → キーで移動</span><div class="nav-buttons"><button id="prev" aria-label="前のスライド">←</button><output id="counter" aria-live="polite">01 / 07</output><button id="next" aria-label="次のスライド">→</button></div><span class="draft">INTERVIEW DRAFT</span></footer><div id="progress" aria-hidden="true"></div>
+</body></html>
